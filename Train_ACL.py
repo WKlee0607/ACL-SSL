@@ -45,6 +45,8 @@ def main(model_name, exp_name, train_config_name, data_path_dict, save_path):
     use_ddp = True if num_gpus > 1 else False
 
     rank = 0 if not use_ddp else None
+    print("use_ddp :",use_ddp)
+    print("rank :", rank)
 
     if use_ddp:
         dist.init_process_group("nccl", timeout=datetime.timedelta(seconds=9000))
@@ -141,6 +143,8 @@ def main(model_name, exp_name, train_config_name, data_path_dict, save_path):
     exflickr_dataloader = torch.utils.data.DataLoader(exflickr_dataset, batch_size=1, shuffle=False, num_workers=1,
                                                       pin_memory=False, drop_last=False)
 
+    # AVSBench Dataset is not prepared yet.
+    '''
     # Get Test Dataloader (AVS)
     avss4_dataset = AVSBenchDataset(data_path_dict['avs'], 'avs1_s4_test', is_train=False,
                                     input_resolution=args.input_resolution)
@@ -151,6 +155,7 @@ def main(model_name, exp_name, train_config_name, data_path_dict, save_path):
                                      input_resolution=args.input_resolution)
     avsms3_dataloader = torch.utils.data.DataLoader(avsms3_dataset, batch_size=5, shuffle=False, num_workers=1,
                                                     pin_memory=False, drop_last=False)
+    '''
 
     ''' Optimizer '''
     module_path, module_name = args.optim.pop('module_path'), args.optim.pop('module_name')
@@ -196,6 +201,8 @@ def main(model_name, exp_name, train_config_name, data_path_dict, save_path):
 
         pbar = tqdm(train_dataloader, desc=f"Train Epoch {epoch}...", disable=(rank != 0))
         sampler.set_epoch(epoch) if use_ddp else None
+
+        
         for step, data in enumerate(pbar):
             images, audios, labels = data['images'], data['audios'], data['labels']
 
@@ -245,8 +252,9 @@ def main(model_name, exp_name, train_config_name, data_path_dict, save_path):
             avr_loss = total_loss_per_epopch / loss_add_count
             if rank == 0:
                 pbar.set_description(f"Training Epoch {epoch}, Loss = {round(avr_loss, 5)}")
-
-        dist.barrier()
+        
+        if use_ddp:
+            dist.barrier()
 
         if rank == 0:
             loss_per_epoch_dict = dict(
@@ -257,7 +265,7 @@ def main(model_name, exp_name, train_config_name, data_path_dict, save_path):
             writer.add_scalars('train/loss', loss_per_epoch_dict, epoch)
             for i, param in enumerate(optimizer.param_groups):
                 writer.add_scalars('train/lr', {f'param{i}': optimizer.param_groups[i]['lr']}, epoch)
-
+            
             ''' Evaluate '''
             module.train(False)
 
@@ -270,14 +278,20 @@ def main(model_name, exp_name, train_config_name, data_path_dict, save_path):
                     eval_vggss_agg(module, unheard_dataloader, viz_dir_template.format('vggss_unheard'), epoch,
                                    tensorboard_path=tensorboard_path)
                 else:
+                    
                     result_dict = eval_vggss_agg(module, vggss_dataloader, viz_dir_template.format('vggss'), epoch,
                                                  tensorboard_path=tensorboard_path)
+                    
                     eval_flickr_agg(module, flickr_dataloader, viz_dir_template.format('flickr'), epoch,
                                     tensorboard_path=tensorboard_path)
+                    '''
+                    # AVSBench Dataset is not prepared yet.
+                    
                     eval_avsbench_agg(module, avss4_dataloader, viz_dir_template.format('s4'), epoch,
                                       tensorboard_path=tensorboard_path)
                     eval_avsbench_agg(module, avsms3_dataloader, viz_dir_template.format('ms3'), epoch,
                                       tensorboard_path=tensorboard_path)
+                    '''
                     eval_exvggss_agg(module, exvggss_dataloader, viz_dir_template.format('exvggss'), epoch,
                                      tensorboard_path=tensorboard_path)
                     eval_exflickr_agg(module, exflickr_dataloader, viz_dir_template.format('exflickr'), epoch,
@@ -310,13 +324,14 @@ if __name__ == "__main__":
     parser.add_argument('--save_path', type=str, default='', help='Save path for model and results')
     parser.add_argument('--vggss_path', type=str, default='', help='VGGSS dataset directory')
     parser.add_argument('--flickr_path', type=str, default='', help='Flickr dataset directory')
+    # AVSBench Dataset is not prepared yet.
     parser.add_argument('--avs_path', type=str, default='', help='AVSBench dataset directory')
 
     args = parser.parse_args()
 
-    data_path = {'vggss': args.vggss_data_path,
-                 'flickr': args.flickr_data_path,
-                 'avs': args.avs_data_path}
+    data_path = {'vggss': args.vggss_path,
+                 'flickr': args.flickr_path,
+                 'avs': args.avs_path}
 
     # Run example
     main(args.model_name, args.exp_name, args.train_config, data_path, args.save_path)
