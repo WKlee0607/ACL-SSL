@@ -215,7 +215,7 @@ def main(model_name, exp_name, train_config_name, data_path_dict, save_path):
 
                 for j, loss_name in enumerate(args.loss):
                     loss_dict[loss_name] = getattr(import_module('loss_utils'), loss_name)(**loss_args) * args.loss_w[j]
-                    loss_per_epoch_dict[loss_name] += loss_dict[loss_name]
+                    loss_per_epoch_dict[loss_name] += loss_dict[loss_name].item()
                 loss = torch.sum(torch.stack(list(loss_dict.values())))
 
                 if rank == 0:
