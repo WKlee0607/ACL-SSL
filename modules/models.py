@@ -282,8 +282,7 @@ class ACL(nn.Module):
             out_dict = {'heatmap': heatmap, 'seg_logit' : seg_logit, 'embedding': embedding, "spatial_feat": spatial_feat}
             
             # forward_ideas
-            refined_heatmap = self.forward_ideas(out_dict, resolution)
-            out_dict['heatmap'] = refined_heatmap
+            out_dict['heatmap'] = self.forward_ideas(out_dict, resolution) # refined_heatmap
 
         return out_dict
     
@@ -326,11 +325,11 @@ class ACL(nn.Module):
 
         # 4. 2개의 logit 평균
         final_logit = (seg_logit + atten_norm) / 2
-        masker_i_heatmap = self.masker_i(final_logit, infer=True) # [batch , 1, resolution, resolution]
+        refined_heatmap = self.masker_i(final_logit, infer=True) # [batch , 1, resolution, resolution] # masker_i_heatmap
         
         # 5. [0, 1] norm
-        m_min, m_max = masker_i_heatmap.min(), masker_i_heatmap.max()
-        refined_heatmap = (masker_i_heatmap - m_min)/(m_max - m_min) # 0~1로 norm # [batch, 1, resolution, resolution] == heatmap.size()
+        #m_min, m_max = masker_i_heatmap.min(), masker_i_heatmap.max()
+        #refined_heatmap = (masker_i_heatmap - m_min)/(m_max - m_min) # 0~1로 norm # [batch, 1, resolution, resolution] == heatmap.size()
 
         return refined_heatmap
 
