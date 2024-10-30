@@ -1,0 +1,17 @@
+# sftp
+/.vscode/*.json
+
+# logs
+/logs/
+/pretrain/
+
+# pycache
+/__pycache__/*
+/Flickr/__pycache__
+/AVSBench/__pycache__
+/VGGSS/__pycache__/
+/modules/__pycache__
+/modules/AudioToken/__pycache__
+/modules/BEATs/__pycache__
+/modules/CLIPSeg/__pycache__
+/modules/FGA/__pycache__
