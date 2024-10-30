@@ -10,6 +10,9 @@ import csv
 import json
 from typing import Dict, List, Optional, Union
 
+import time
+import sys
+
 
 def load_all_bboxes(annotation_dir: str) -> Dict[str, List[np.ndarray]]:
     """
@@ -73,11 +76,11 @@ class VGGSSDataset(Dataset):
         self.csv_dir = 'VGGSS/metadata/' + split + '.csv'
 
         ''' Audio files '''
-        self.audio_path = os.path.join(data_path, 'audio')
+        self.audio_path = os.path.join(data_path, 'vggss_audio_1channel') # - not edit audio : 1채널 / edit audio : 2채널
         audio_files = set([fn.split('.wav')[0] for fn in os.listdir(self.audio_path) if fn.endswith('.wav')])
 
         ''' Image files '''
-        self.image_path = os.path.join(data_path, 'frames')
+        self.image_path = os.path.join(data_path, 'frames_v6') #'frames')
         image_files = set([fn.split('.jpg')[0] for fn in os.listdir(self.image_path) if fn.endswith('.jpg')])
 
         ''' Ground truth (Bounding box) '''
@@ -142,8 +145,20 @@ class VGGSSDataset(Dataset):
         Returns:
             torch.Tensor: Audio data.
         """
-        audio_file, _ = torchaudio.load(os.path.join(self.audio_path, self.file_list[item] + '.wav'))
+        audio_file, _ = torchaudio.load(os.path.join(self.audio_path, self.file_list[item] + '.wav')) # size: torch.Size([2, 160086])
+        # print(audio_file.shape)
         audio_file = audio_file.squeeze(0)
+        
+        """if audio_file.shape[0] == 2: 
+            audio_file = audio_file[:-1,:].squeeze(0) 
+        else: 
+            audio_file = audio_file.squeeze(0)"""
+        
+        '''
+        import sys
+        print(audio_file.size())
+        sys.stdout.flush()        
+        '''
 
         # slicing or padding based on set_length
         # slicing
@@ -153,7 +168,7 @@ class VGGSSDataset(Dataset):
         if audio_file.shape[0] < (self.SAMPLE_RATE * self.set_length):
             pad_len = (self.SAMPLE_RATE * self.set_length) - audio_file.shape[0]
             pad_val = torch.zeros(pad_len)
-            audio_file = torch.cat((audio_file, pad_val), dim=0)
+            audio_file = torch.cat((audio_file, pad_val), dim=0) # audio_file.shape : 159753 / pad_val.shape : 247
 
         return audio_file
 
@@ -286,8 +301,11 @@ class ExtendVGGSSDataset(Dataset):
         Returns:
             torch.Tensor: Audio data.
         """
-        audio_file, _ = torchaudio.load(os.path.join(self.audio_path, self.audio_files[item]))
+        audio_file, _ = torchaudio.load(os.path.join(self.audio_path, self.audio_files[item]), channels_first=True)
+        #if audio_file.shape[0] == 2:
+        #    audio_file = audio_file[0]
         audio_file = audio_file.squeeze(0)
+        
 
         # slicing or padding based on set_length
         # slicing
@@ -297,7 +315,7 @@ class ExtendVGGSSDataset(Dataset):
         if audio_file.shape[0] < (self.SAMPLE_RATE * self.set_length):
             pad_len = (self.SAMPLE_RATE * self.set_length) - audio_file.shape[0]
             pad_val = torch.zeros(pad_len)
-            audio_file = torch.cat((audio_file, pad_val), dim=0)
+            audio_file = torch.cat((audio_file, pad_val), dim=0) # audio_file.shape : 133120 / pad_val.shape : 26880
 
         return audio_file
 

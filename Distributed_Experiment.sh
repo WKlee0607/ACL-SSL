@@ -1,15 +1,18 @@
-#!/bin/bash
+#!/usr/bin/bash
 
+#SBATCH -J train_ACL
+#SBATCH --gres=gpu:2
+#SBATCH --cpus-per-gpu=8
+#SBATCH --mem-per-gpu=32G
+#SBATCH -p batch_ugrad
+#SBATCH -w aurora-g7
+#SBATCH -t 3-0
+#SBATCH -o logs/slurm-%A.out
+
+pwd
+which python
+fovert
 export CUDA_VISIBLE_DEVICES="0,1"
 export OMP_NUM_THREADS="4"
-
-python -m torch.distributed.launch --nnodes=1 --nproc_per_node=2 --master_port 12345 \
-Train_ACL.py \
---model_name ACL_ViT16 \
---train_config Exp_ACL_v1 \
---exp_name aclifa_2gpu \
---vggss_path {put dataset directory} \
---flickr_path {put dataset directory} \
---avs_path {put dataset directory} \
---save_path {put logging directory}
-
+torchrun --nnodes=1 --nproc_per_node=2 --master_port 12345 Train_ACL.py --model_name ACL_ViT16 --exp_name aclifa_2gpu --train_config Exp_ACL_v1 --vggss_path /data/datasets/ACL_Datasets/VGGSound/ --flickr_path /data/datasets/ACL_Datasets/Flikcr/ --avs_path /data/datasets/ACL_Datasets/AVS1/ --save_path /data/fovert/repos/repos/ACL-SSL/save_folder/
+exit 0

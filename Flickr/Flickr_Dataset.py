@@ -239,11 +239,11 @@ class ExtendFlickrDataset(Dataset):
         self.split = 'exflickr'
 
         ''' Audio files '''
-        self.audio_path = os.path.join(data_path, 'extend_audio')
+        self.audio_path = os.path.join(self.data_path, 'extend_audio') # data_path -> self.data_path로 변경.
         audio_files = set([fn.split('.wav')[0] for fn in os.listdir(self.audio_path) if fn.endswith('.wav')])
 
         ''' Image files '''
-        self.image_path = os.path.join(data_path, 'extend_frames')
+        self.image_path = os.path.join(self.data_path, 'extend_frames') # data_path -> self.data_path로 변경.
         image_files = set([fn.split('.jpg')[0] for fn in os.listdir(self.image_path) if fn.endswith('.jpg')])
 
         ''' Ground truth (Bounding box) '''

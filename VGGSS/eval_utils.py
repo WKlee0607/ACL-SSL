@@ -37,7 +37,7 @@ class Evaluator(object):
             infer = pred[j]
             gt = target[j]
             if thr is None:
-                thr = np.sort(infer.detach().cpu().numpy().flatten())[int(infer.shape[1] * infer.shape[2] / 2)]
+                thr = np.sort(infer.detach().cpu().numpy().flatten())[int(infer.shape[1] * infer.shape[2] / 2)] # thr이 None이면 infer의 중앙값으로 thr을 설정
             self.cal_CIOU(infer, gt, thr)
 
     def cal_CIOU(self, infer: torch.Tensor, gtmap: torch.Tensor, thres: float = 0.01) -> List[float]:

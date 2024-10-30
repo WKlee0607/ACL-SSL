@@ -7,6 +7,7 @@ import datetime
 import yaml
 import shutil
 import argparse
+import gc
 
 from tqdm import tqdm
 from util import get_prompt_template, fix_seed, seed_worker
@@ -23,6 +24,7 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data.distributed import DistributedSampler
 
+os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
 def main(model_name, exp_name, train_config_name, data_path_dict, save_path):
     """
@@ -80,9 +82,12 @@ def main(model_name, exp_name, train_config_name, data_path_dict, save_path):
     ''' Get model '''
     model_conf_file = f'./config/model/{model_name}.yaml'
     model = getattr(import_module('modules.models'), config['model'])(model_conf_file, device)
+
     if rank == 0:
         print(f"Model '{model.__class__.__name__}' with configure file '{model_name}' is loaded")
         print(f"Loaded model details: {vars(model.args.model)}\n")
+
+
 
     training_consumed_sec = 0
 
@@ -124,7 +129,7 @@ def main(model_name, exp_name, train_config_name, data_path_dict, save_path):
                                        input_resolution=args.input_resolution)
         unheard_dataloader = torch.utils.data.DataLoader(unheard_dataset, batch_size=1, shuffle=False, num_workers=1,
                                                          pin_memory=False, drop_last=False)
-
+    '''
     # Get Test Dataloader (Flickr)
     flickr_dataset = FlickrDataset(data_path_dict['flickr'], 'flickr_test', is_train=False,
                                    input_resolution=args.input_resolution)
@@ -151,7 +156,8 @@ def main(model_name, exp_name, train_config_name, data_path_dict, save_path):
                                      input_resolution=args.input_resolution)
     avsms3_dataloader = torch.utils.data.DataLoader(avsms3_dataset, batch_size=5, shuffle=False, num_workers=1,
                                                     pin_memory=False, drop_last=False)
-
+    '''
+    
     ''' Optimizer '''
     module_path, module_name = args.optim.pop('module_path'), args.optim.pop('module_name')
     optimizer = getattr(import_module(module_path), module_name)(model.parameters(), **args.optim)
@@ -183,6 +189,9 @@ def main(model_name, exp_name, train_config_name, data_path_dict, save_path):
 
     ''' Train Loop '''
     for epoch in range(args.epoch):
+        torch.cuda.empty_cache()
+        gc.collect()
+
         module.train(True)
 
         total_loss_per_epopch = 0.0
@@ -215,7 +224,7 @@ def main(model_name, exp_name, train_config_name, data_path_dict, save_path):
 
                 for j, loss_name in enumerate(args.loss):
                     loss_dict[loss_name] = getattr(import_module('loss_utils'), loss_name)(**loss_args) * args.loss_w[j]
-                    loss_per_epoch_dict[loss_name] += loss_dict[loss_name]
+                    loss_per_epoch_dict[loss_name] += loss_dict[loss_name].item()
                 loss = torch.sum(torch.stack(list(loss_dict.values())))
 
                 if rank == 0:
@@ -272,6 +281,7 @@ def main(model_name, exp_name, train_config_name, data_path_dict, save_path):
                 else:
                     result_dict = eval_vggss_agg(module, vggss_dataloader, viz_dir_template.format('vggss'), epoch,
                                                  tensorboard_path=tensorboard_path)
+                    '''
                     eval_flickr_agg(module, flickr_dataloader, viz_dir_template.format('flickr'), epoch,
                                     tensorboard_path=tensorboard_path)
                     eval_avsbench_agg(module, avss4_dataloader, viz_dir_template.format('s4'), epoch,
@@ -282,6 +292,7 @@ def main(model_name, exp_name, train_config_name, data_path_dict, save_path):
                                      tensorboard_path=tensorboard_path)
                     eval_exflickr_agg(module, exflickr_dataloader, viz_dir_template.format('exflickr'), epoch,
                                       tensorboard_path=tensorboard_path)
+                    '''
 
             save_dir = os.path.join(save_path, 'Train_record', model_exp_name, f'Param_{str(epoch)}.pth')
             module.save(save_dir)
@@ -311,12 +322,14 @@ if __name__ == "__main__":
     parser.add_argument('--vggss_path', type=str, default='', help='VGGSS dataset directory')
     parser.add_argument('--flickr_path', type=str, default='', help='Flickr dataset directory')
     parser.add_argument('--avs_path', type=str, default='', help='AVSBench dataset directory')
+    parser.add_argument('--keep_traing_model_path', type=str, default='', help='Path to keep training model')
 
     args = parser.parse_args()
 
-    data_path = {'vggss': args.vggss_data_path,
-                 'flickr': args.flickr_data_path,
-                 'avs': args.avs_data_path}
+    data_path = {'vggss': args.vggss_path,
+                 'flickr': args.flickr_path,
+                 'avs': args.avs_path,
+                 'keep_traing_model_path': args.keep_traing_model_path}
 
     # Run example
     main(args.model_name, args.exp_name, args.train_config, data_path, args.save_path)

@@ -60,7 +60,7 @@ def eval_vggss_agg(
     # Thresholds for evaluation
     thrs = [0.05, 0.1, 0.15, 0.2, 0.25, 0.30, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.70, 0.75, 0.8, 0.85, 0.9, 0.95]
     evaluators = [vggss_eval.Evaluator() for i in range(len(thrs))]
-
+    
     for step, data in enumerate(tqdm(test_dataloader, desc=f"Evaluate VGG-SS({test_split}) dataset...")):
         images, audios, bboxes = data['images'], data['audios'], data['bboxes']
         labels, name = data['labels'], data['ids']
@@ -166,20 +166,20 @@ def eval_avsbench_agg(
     evaluators = [avsbench_eval.Evaluator() for i in range(len(thrs))]
 
     for step, data in enumerate(tqdm(test_dataloader, desc=f"Evaluate AVSBench dataset({test_split})...")):
-        images, audios, gts, labels, name = data['images'], data['audios'], data['gts'], data['labels'], data['ids']
+        images, audios, gts, labels, name = data['images'].to(model.device), data['audios'].to(model.device), data['gts'].to(model.device), data['labels'], data['ids']
 
         # Inference
         placeholder_tokens = model.get_placeholder_token(prompt_template.replace('{}', ''))
         placeholder_tokens = placeholder_tokens.repeat((test_dataloader.batch_size, 1))
-        audio_driven_embedding = model.encode_audio(audios.to(model.device), placeholder_tokens, text_pos_at_prompt,
+        audio_driven_embedding = model.encode_audio(audios, placeholder_tokens, text_pos_at_prompt,
                                                     prompt_length)
 
         # Localization result
-        out_dict = model(images.to(model.device), audio_driven_embedding, 224)
+        out_dict = model(images, audio_driven_embedding, 224)
 
         # Evaluation for all thresholds
         for i, thr in enumerate(thrs):
-            evaluators[i].evaluate_batch(out_dict['heatmap'], gts.to(model.device), thr)
+            evaluators[i].evaluate_batch(out_dict['heatmap'], gts, thr)
 
         # Visual results
         for j in range(test_dataloader.batch_size):

@@ -30,7 +30,7 @@ def main(
     """
 
     USE_CUDA = torch.cuda.is_available()
-    device = torch.device('cuda:0' if USE_CUDA else 'cpu')
+    device = torch.cuda.current_device() if USE_CUDA else torch.device('cpu')
 
     model_exp_name = f'{model_name}_{exp_name}' if exp_name != "" else model_name
 
@@ -44,8 +44,10 @@ def main(
 
         # Load model
         postfix = str(epoch) if epoch is not None else 'best'
-        model_dir = os.path.join(save_path, 'Train_record', model_exp_name, f'Param_{postfix}.pth')
+        #model_dir = os.path.join(save_path, 'Train_record', model_exp_name, f'Param_{postfix}.pth') # 
+        model_dir = os.path.join(save_path, 'Pretrained_model_in_paper',  f'Param_best.pth') # pre-trained model of the paper 
         model.load(model_dir)
+        print("model_dir :", model_dir)
 
         # Set directory
         viz_dir_template = os.path.join(save_path, 'Visual_results', '{}', model_exp_name, f'epoch{postfix}')
@@ -77,12 +79,12 @@ def main(
                                                         pin_memory=True, drop_last=False)
 
         # Evaluate
-        eval_exflickr_agg(model, exflickr_dataloader, viz_dir_template.format('exflickr'))
-        eval_exvggss_agg(model, exvggss_dataloader, viz_dir_template.format('exvggss'))
-        eval_flickr_agg(model, flickr_dataloader, viz_dir_template.format('flickr'), tensorboard_path=tensorboard_path)
         eval_vggss_agg(model, vggss_dataloader, viz_dir_template.format('vggss'), tensorboard_path=tensorboard_path)
-        eval_avsbench_agg(model, avss4_dataloader, viz_dir_template.format('s4'), tensorboard_path=tensorboard_path)
-        eval_avsbench_agg(model, avsms3_dataloader, viz_dir_template.format('ms3'), tensorboard_path=tensorboard_path)
+        #eval_flickr_agg(model, flickr_dataloader, viz_dir_template.format('flickr'), tensorboard_path=tensorboard_path)
+        #eval_exflickr_agg(model, exflickr_dataloader, viz_dir_template.format('exflickr'))
+        #eval_exvggss_agg(model, exvggss_dataloader, viz_dir_template.format('exvggss'))
+        #eval_avsbench_agg(model, avss4_dataloader, viz_dir_template.format('s4'), tensorboard_path=tensorboard_path)
+        #eval_avsbench_agg(model, avsms3_dataloader, viz_dir_template.format('ms3'), tensorboard_path=tensorboard_path)
 
 
 if __name__ == "__main__":
