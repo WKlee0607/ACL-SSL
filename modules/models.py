@@ -274,65 +274,48 @@ class ACL(nn.Module):
             '''
             # input 정의
             seg_logit = self.forward_module(image, embedding, resolution)
-            heatmap = self.masker_i(seg_logit, infer=True)
-            spatial_feat = (self.av_grounder.clip.vision_model(image,
-                                                              output_attentions=None,
-                                                              output_hidden_states=True,
-                                                              return_dict=True)).last_hidden_state
-            out_dict = {'heatmap': heatmap, 'seg_logit' : seg_logit, 'embedding': embedding, "spatial_feat": spatial_feat}
+            spatial_feat = self.av_grounder.get_pixels(image) # v^D: [B, c, h, w] # [B, 512, 22, 22]
             
             # forward_ideas
-            out_dict['heatmap'] = self.forward_ideas(out_dict, resolution) # refined_heatmap
+            refined_heatmap = self.forward_ideas(seg_logit, spatial_feat, embedding, resolution)
+            out_dict = {'heatmap': refined_heatmap}
 
         return out_dict
     
     
-    def forward_ideas(self, out_dict: dict, resolution: int = 224 ):
+    ########## implements ideas 
+    def forward_ideas(self, seg_logit, spatial_feat, embedding, resolution: int = 224 ):
         '''
         Return refined heatmap reflecting visual feature similarity 
 
         Args :
-            out_dict (dict): {'heatmap': heatmap, 'seg_logit' : seg_logit, 'embedding': embedding, "spatial_feat": spatial_feat}
+            seg_logit : [batch, channel, height, width], same size with heatmap.
+            spatial_feat : [batch, channel, embed_size, embed_size] -> [batch, 512, 22, 22]
+            embedding : [1, channel] -> [B, 512]?
             resolution (int): Resolution of the output tensor.
-        
-        Size :
-            heatmap : [batch, channel, height, width]
-            seg_logit : [batch, channel, height, width]
-            spatial_feat : [batch, # of all embedding tokens, embedding dim] -> [batch, 484, 768]
         '''
-        heatmap, seg_logit, spatial_feat = out_dict['heatmap'], out_dict['seg_logit'], out_dict['spatial_feat'] 
-       
-        # 1. heatmap에서 가장 score 높은 애의 피쳐 벡터 추출 & 나머지 애들과 atten score 계산
-        argmax_flat = torch.argmax(heatmap.view(heatmap.shape[0], heatmap.shape[1], -1), dim=-1)
-        embed_size = math.sqrt(spatial_feat.size(dim=1)-1) # 22.0
-        patch_size = heatmap.size(dim=-1) / embed_size # 16.0 
+        # 1. audio embedding과 spatial feature와 atten score 계산
+        B, _, _, _ = spatial_feat.shape
+        embed_size = spatial_feat.size(dim=-1) # 22
 
-        height_coords = (argmax_flat // heatmap.shape[-1]) // patch_size # [batch, coord]
-        width_coords = (argmax_flat % heatmap.shape[-1]) // patch_size # [batch, coord]
-        max_feat_loc = (height_coords*embed_size + width_coords).long() # [batch, 1] : max_loc이 들어감.
+        embedding = embedding.unsqueeze(0).repeat(B, 1, 1)
+        atten_score = embedding @ spatial_feat.reshape((B, -1, int(embed_size**2))) # [B, 1, embed_size**2] - [B, 1, 484]
 
-        max_feat = torch.gather(spatial_feat, 1, max_feat_loc.unsqueeze(-1).expand(-1, -1, 768)) # [batch, 1, 768]
-        atten_score = (spatial_feat[:, 1:, :] @ max_feat.transpose(1,2)).transpose(-1, -2) # [batch, 1, 484]
-        
         # 2. reshaped & interpol
         atten_reshaped = torch.reshape(atten_score, (-1, 1, int(embed_size), int(embed_size))) # [batch , 1, embed_size, embed_size]
-        atten_interpolated = F.interpolate(atten_reshaped, resolution, mode='bicubic') # [batch, 1, resolution, resolution]
+        atten_interpolated = F.interpolate(atten_reshaped, (resolution, resolution), mode='bicubic') # [batch, 1, resolution, resolution]
         
         # 3. norm same interval with seg_logit
-        i_min, i_max = atten_interpolated.min(), atten_interpolated.max()
-        a,b = seg_logit.min(), seg_logit.max()
-        atten_norm = a + (b-a)*((atten_interpolated - i_min) / (i_max - i_min))   # similarity [a, b] 구간으로 norm
+        i_min, i_max = torch.amin(atten_interpolated, dim=(1, 2, 3), keepdim=True), torch.amax(atten_interpolated, dim=(1, 2, 3), keepdim=True) # [B, 1, 1, 1]         
+        a,b = torch.amin(seg_logit, dim=(1, 2, 3), keepdim=True), torch.amax(seg_logit, dim=(1, 2, 3), keepdim=True) # [B, 1, 1, 1]
+        atten_norm = a + (b-a)*(atten_interpolated - i_min) / (i_max - i_min)   # similarity [a, b] 구간으로 norm # [B, 1, resolution, resolution]
 
-        # 4. 2개의 logit 평균
-        final_logit = (seg_logit + atten_norm) / 2
-        refined_heatmap = self.masker_i(final_logit, infer=True) # [batch , 1, resolution, resolution] # masker_i_heatmap
-        
-        # 5. [0, 1] norm
-        #m_min, m_max = masker_i_heatmap.min(), masker_i_heatmap.max()
-        #refined_heatmap = (masker_i_heatmap - m_min)/(m_max - m_min) # 0~1로 norm # [batch, 1, resolution, resolution] == heatmap.size()
+        # test
+        refined_seg_logit = (seg_logit + atten_norm) / 2
+        refined_heatmap = self.masker_i(refined_seg_logit, infer=True)
 
         return refined_heatmap
-
+    
 
     def save(self, model_dir: str):
         """
